@@ -17,15 +17,23 @@ logger = logging.getLogger('botomfa')
 stdout_handler = logging.StreamHandler(stream=sys.stdout)
 stdout_handler.setFormatter(
     logging.Formatter('%(levelname)s - %(message)s'))
-stdout_handler.setLevel(logging.DEBUG)
+stdout_handler.setLevel(logging.ERROR)
 logger.addHandler(stdout_handler)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.ERROR)
 
 AWS_CREDS_PATH = '%s/.aws/credentials' % (os.path.expanduser('~'),)
 
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('-v', '--verbose',
+                        action='store_true',
+                        required=False,
+                        help="Output extra information.")
+    parser.add_argument('--debug',
+                        action='store_true',
+                        required=False,
+                        help="Output debug information.")
     parser.add_argument('--device',
                         required=False,
                         metavar='arn:aws:iam::123456788990:mfa/dudeman',
@@ -42,21 +50,22 @@ def main():
                              "can also be provided via the environment "
                              "variable 'MFA_STS_DURATION'. ")
     parser.add_argument('--profile',
+                        required=False,
+                        default='default',
                         help="If using profiles, specify the name here. The "
                         "default profile name is 'default'. The value can "
                         "also be provided via the environment variable "
-                        "'AWS_PROFILE'.",
-                        required=False)
+                        "'AWS_PROFILE'.")
     parser.add_argument('--assume-role',
+                        required=False,
                         metavar='arn:aws:iam::123456788990:role/RoleName',
                         help="The ARN of the AWS IAM Role you would like to "
                         "assume, if specified. This value can also be provided"
-                        " via the environment variable 'MFA_ASSUME_ROLE'",
-                        required=False)
+                        " via the environment variable 'MFA_ASSUME_ROLE'")
     parser.add_argument('--role-session-name',
+                        required=False,
                         help="Friendly session name required when using "
-                        "--assume-role",
-                        required=False)
+                        "--assume-role")
     args = parser.parse_args()
 
     if not os.path.isfile(AWS_CREDS_PATH):
@@ -73,8 +82,6 @@ def validate(args, config):
     if not args.profile:
         if os.environ.get('AWS_PROFILE'):
             args.profile = os.environ.get('AWS_PROFILE')
-        else:
-            args.profile = 'default'
 
     short_term_name = args.profile
 
@@ -98,6 +105,16 @@ def validate(args, config):
             "'aws_secret_access_key'" % (long_term_name,))
     except NoOptionError as e:
         log_error_and_exit(e)
+
+    # get verbose from param
+    if args.verbose:
+        stdout_handler.setLevel(logging.INFO)
+        logger.setLevel(logging.INFO)
+
+    # get debug from param
+    if args.debug:
+        stdout_handler.setLevel(logging.DEBUG)
+        logger.setLevel(logging.DEBUG)
 
     # get device from param, env var or config
     if not args.device:
@@ -181,9 +198,9 @@ def validate(args, config):
                 get_credentials(
                     short_term_name, key_id, access_key, args, config)
             else:
-                logger.info(
-                    "Your credentials are still valid for %s seconds"
-                    " they will expire at %s"
+                print(
+                    "Credentials still valid for %s seconds. "
+                    "They will expire at %s."
                     % (diff.total_seconds(), exp))
         # There are credentials for a current role and the role
         # that is attempting to be assumed is different
@@ -205,10 +222,9 @@ def validate(args, config):
                 get_credentials(
                     short_term_name, key_id, access_key, args, config)
             else:
-                logger.info(
-                    "Your credentials are still valid for %s seconds"
-                    " they will expire at %s"
-                    % (diff.total_seconds(), exp))
+                print(
+                    "Your credentials are still valid for %s seconds. "
+                    "They will expire at %s" % (diff.total_seconds(), exp))
 
 
 def log_error_and_exit(message):
